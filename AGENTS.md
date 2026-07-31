@@ -4,8 +4,8 @@
 
 - All code lives in `modaco-promotion-api/` (Express 4 + TypeScript + Prisma 6 + Postgres 16 + Redis 7). Run every command from that directory.
 - The repo root `package.json` / `package-lock.json` / `node_modules/` are a stray trimmed copy — ignore them, never `npm install` at the root.
-- `modaco-promotion-api/opencode.json` is gitignored (local-only MCP/permission config). It references `AGENTS.md` and `DEPLOYMENT.md`; `DEPLOYMENT.md` does not exist.
-- `README.md` (setup + scenarios), `ADR.md` (architecture decisions ADR-001..006), `AI_APPENDIX.md` (Form 5) are the canonical docs.
+- `modaco-promotion-api/opencode.json` is gitignored (local-only MCP/permission config). It references `AGENTS.md` and `DEPLOYMENT.md`.
+- `README.md` (setup + scenarios), `ADR.md` (architecture decisions ADR-001..006), `DEPLOYMENT.md`, and `AI_APPENDIX.md` (Form 5) are the canonical docs.
 
 ## Setup
 
@@ -14,7 +14,7 @@ npm install
 docker compose up -d          # Postgres 16, Redis 7, MinIO
 cp .env.example .env
 npm run prisma:generate       # required before app AND tests
-npm run db:push
+npm run prisma:migrate -- --name init
 npm run db:seed
 npm run dev                   # tsx watch, http://localhost:3000
 ```
@@ -29,8 +29,8 @@ npm run dev                   # tsx watch, http://localhost:3000
 
 ## Test quirks
 
-- Integration tests (16) use a **separate** `modaco_test` database, not `modaco`. Override with `TEST_DATABASE_URL`. `tests/setup.ts` forces `CACHE_DRIVER=memory` and runs `prisma db push --accept-data-loss` (destructive, test DB only) on every run.
-- vitest config: `fileParallelism: false`, 60s test timeout. Pricing engine has 10 unit tests.
+- Integration tests (26) use a **separate** `modaco_test` database, not `modaco`. Override with `TEST_DATABASE_URL`. `tests/setup.ts` forces `CACHE_DRIVER=memory` and runs `prisma db push --accept-data-loss` (destructive, test DB only) on every run.
+- vitest config: `fileParallelism: false`, 60s test timeout. Unit tests: pricing engine (10) + ingest/lambda (12).
 - The suite only runs against the local Postgres — it is not hermetic.
 
 ## Money and pricing (do not "simplify")
