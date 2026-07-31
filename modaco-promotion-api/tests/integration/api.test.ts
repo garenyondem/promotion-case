@@ -1,7 +1,10 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Server } from 'node:http';
+import { promises as fsp } from 'node:fs';
+import { join } from 'node:path';
 import request from 'supertest';
 import { buildApp } from '../../src/app';
+import { env } from '../../src/config/env';
 import { prisma } from '../../src/db/client';
 
 let server: Server;
@@ -63,6 +66,18 @@ async function productEffectivePrice(id: string): Promise<number> {
   return res.body.effectivePrice as number;
 }
 
+async function waitForJob(jobId: string): Promise<Record<string, unknown>> {
+  for (let i = 0; i < 200; i++) {
+    const res = await request(server).get(`/ingest/${jobId}`);
+    const job = res.body as Record<string, unknown>;
+    if (job?.status !== 'PROCESSING') {
+      return job;
+    }
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  throw new Error('job did not finish in time');
+}
+
 describe('products API', () => {
   beforeEach(async () => {
     await resetDb();
@@ -117,6 +132,53 @@ describe('products API', () => {
   it('returns 404 for a missing product', async () => {
     const res = await request(server).get('/products/00000000-0000-0000-0000-000000000000');
     expect(res.status).toBe(404);
+  });
+
+  it('returns 404 for a malformed product id', async () => {
+    const res = await request(server).get('/products/not-a-uuid');
+    expect(res.status).toBe(404);
+  });
+
+  it('rejects an out-of-range base price', async () => {
+    const res = await request(server).post('/products').send({
+      sku: 'BIG-1',
+      name: 'Expensive',
+      category: 'Footwear',
+      basePrice: 1e10,
+      stockQuantity: 1,
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects an out-of-range stock quantity', async () => {
+    const res = await request(server).post('/products').send({
+      sku: 'BIG-2',
+      name: 'Big stock',
+      category: 'Footwear',
+      basePrice: 10,
+      stockQuantity: 2147483648,
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 for a malformed JSON body', async () => {
+    const res = await request(server)
+      .post('/products')
+      .set('Content-Type', 'application/json')
+      .send('{not json');
+    expect(res.status).toBe(400);
+  });
+
+  it('does not confuse a category named * with the unfiltered listing', async () => {
+    await createProduct({ sku: 'STAR-1', category: '*', basePrice: 10 });
+    await createProduct({ sku: 'STAR-2', category: 'Footwear', basePrice: 20 });
+
+    const all = await request(server).get('/products');
+    expect(all.body.pagination.total).toBe(2);
+
+    const filtered = await request(server).get('/products?category=*');
+    expect(filtered.body.pagination.total).toBe(1);
+    expect(filtered.body.data[0].sku).toBe('STAR-1');
   });
 
   it('updates the base price and recomputes the effective price', async () => {
@@ -291,6 +353,56 @@ describe('promotions API', () => {
       });
     expect(res.status).toBe(400);
   });
+
+  it('rejects productId together with a category on a PRODUCT promotion', async () => {
+    const product = await createProduct({ sku: 'M-1' });
+    const res = await request(server)
+      .post('/promotions')
+      .send({
+        ...activeWindow,
+        name: 'Mixed',
+        discountType: 'PERCENTAGE',
+        value: 10,
+        scope: 'PRODUCT',
+        productId: product.id,
+        category: 'Accessories',
+      });
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects productId together with a category on a CATEGORY promotion', async () => {
+    const product = await createProduct({ sku: 'M-2' });
+    const res = await request(server)
+      .post('/promotions')
+      .send({
+        ...activeWindow,
+        name: 'Mixed',
+        discountType: 'PERCENTAGE',
+        value: 10,
+        scope: 'CATEGORY',
+        productId: product.id,
+        category: 'Accessories',
+      });
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects assigning a cancelled promotion', async () => {
+    const p1 = await createProduct({ sku: 'N-1' });
+    const p2 = await createProduct({ sku: 'N-2' });
+    const promotion = await createPromotion({
+      name: '20% off',
+      discountType: 'PERCENTAGE',
+      value: 20,
+      scope: 'PRODUCT',
+      productId: p1.id,
+    });
+    await request(server).post(`/promotions/${promotion.id}/cancel`);
+    const res = await request(server).post(`/promotions/${promotion.id}/assign`).send({
+      scope: 'PRODUCT',
+      productId: p2.id,
+    });
+    expect(res.status).toBe(400);
+  });
 });
 
 describe('ingestion API (Scenario A)', () => {
@@ -320,18 +432,10 @@ describe('ingestion API (Scenario A)', () => {
     expect(upload.status).toBe(202);
     const jobId = upload.body.jobId as string;
 
-    let job: Record<string, unknown> | undefined;
-    for (let i = 0; i < 200; i++) {
-      const res = await request(server).get(`/ingest/${jobId}`);
-      job = res.body;
-      if (job?.status !== 'PROCESSING') {
-        break;
-      }
-      await new Promise((r) => setTimeout(r, 50));
-    }
-    expect(job?.status).toBe('COMPLETED');
-    expect(job?.totalRecords).toBe(3);
-    expect(job?.skippedRecords).toBe(0);
+    const job = await waitForJob(jobId);
+    expect(job.status).toBe('COMPLETED');
+    expect(job.totalRecords).toBe(3);
+    expect(job.skippedRecords).toBe(0);
 
     const accessory = await prisma.product.findUnique({ where: { sku: 'T-1' } });
     const footwear = await prisma.product.findUnique({ where: { sku: 'T-2' } });
@@ -345,16 +449,51 @@ describe('ingestion API (Scenario A)', () => {
       .post('/ingest')
       .attach('file', Buffer.from(csv), { filename: 'products.csv', contentType: 'text/csv' });
     expect(rerun.status).toBe(202);
-    let rerunJob: Record<string, unknown> | undefined;
-    for (let i = 0; i < 200; i++) {
-      const res = await request(server).get(`/ingest/${rerun.body.jobId}`);
-      rerunJob = res.body;
-      if (rerunJob?.status !== 'PROCESSING') {
-        break;
-      }
-      await new Promise((r) => setTimeout(r, 50));
-    }
-    expect(rerunJob?.status).toBe('COMPLETED');
+    const rerunJob = await waitForJob(rerun.body.jobId as string);
+    expect(rerunJob.status).toBe('COMPLETED');
     expect(await prisma.product.count()).toBe(3);
+  });
+
+  it('completes the job and reports rows skipped for malformed rows', async () => {
+    const csv = [
+      'sku,name,category,basePrice,stockQuantity',
+      'S-1,Good,Accessories,100,10',
+      'bad,row',
+      'S-2,Also good,Footwear,200,20',
+    ].join('\n');
+
+    const upload = await request(server)
+      .post('/ingest')
+      .attach('file', Buffer.from(csv), { filename: 'skipped.csv', contentType: 'text/csv' });
+    expect(upload.status).toBe(202);
+
+    const job = await waitForJob(upload.body.jobId as string);
+    expect(job.status).toBe('COMPLETED');
+    expect(job.totalRecords).toBe(3);
+    expect(job.processedRecords).toBe(2);
+    expect(job.skippedRecords).toBe(1);
+  });
+
+  it('deletes the uploaded file after the pipeline completes', async () => {
+    const uploadsDir = join(process.cwd(), env.UPLOAD_DIR);
+    const list = async (): Promise<string[]> =>
+      (await fsp.readdir(uploadsDir).catch(() => [])).sort();
+    const before = await list();
+
+    const csv = ['sku,name,category,basePrice,stockQuantity', 'C-1,Thing,Footwear,10,5'].join('\n');
+    const upload = await request(server)
+      .post('/ingest')
+      .attach('file', Buffer.from(csv), { filename: 'cleanup.csv', contentType: 'text/csv' });
+    expect(upload.status).toBe(202);
+
+    const job = await waitForJob(upload.body.jobId as string);
+    expect(job.status).toBe('COMPLETED');
+
+    let after = await list();
+    for (let i = 0; i < 100 && after.length !== before.length; i++) {
+      await new Promise((r) => setTimeout(r, 50));
+      after = await list();
+    }
+    expect(after).toEqual(before);
   });
 });

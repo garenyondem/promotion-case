@@ -30,6 +30,10 @@ export class PromotionRepository {
     return prisma.promotion.update({ where: { id }, data });
   }
 
+  delete(id: string): Promise<Promotion> {
+    return prisma.promotion.delete({ where: { id } });
+  }
+
   findOverlappingProductPromo(
     productId: string,
     startAt: Date,

@@ -15,7 +15,13 @@ export async function handler(event: { Records: S3Record[] }): Promise<void> {
   const queue = new SQSQueue(new SQSClient({ region: env.AWS_REGION }), env.INGEST_QUEUE_URL ?? '');
   for (const record of event.Records) {
     const jobId = await createJob(record.s3.object.key);
-    await orchestrate(jobId, storage, record.s3.object.key, queue, env.INGEST_CHUNK_SIZE);
-    await setTotalRecords(jobId, 0);
+    const totalRows = await orchestrate(
+      jobId,
+      storage,
+      record.s3.object.key,
+      queue,
+      env.INGEST_CHUNK_SIZE,
+    );
+    await setTotalRecords(jobId, totalRows);
   }
 }

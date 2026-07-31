@@ -12,33 +12,60 @@ export class CacheService {
   ) {}
 
   private async generation(): Promise<number> {
-    return this.provider.getNumber('cache:generation');
+    try {
+      return await this.provider.getNumber('cache:generation');
+    } catch (error) {
+      logger.warn('cache generation read failed', { error: String(error) });
+      return 0;
+    }
   }
 
   async bumpGeneration(): Promise<void> {
-    await this.provider.incr('cache:generation');
+    try {
+      await this.provider.incr('cache:generation');
+    } catch (error) {
+      logger.warn('cache generation bump failed', { error: String(error) });
+    }
   }
 
   async getProduct(id: string): Promise<unknown> {
-    const value = await this.provider.get(`product:${await this.generation()}:${id}`);
-    return value ? JSON.parse(value) : null;
+    try {
+      const value = await this.provider.get(`product:${await this.generation()}:${id}`);
+      return value ? JSON.parse(value) : null;
+    } catch (error) {
+      logger.warn('cache get product failed', { id, error: String(error) });
+      return null;
+    }
   }
 
   async setProduct(id: string, dto: unknown): Promise<void> {
-    await this.provider.set(
-      `product:${await this.generation()}:${id}`,
-      JSON.stringify(dto),
-      this.ttlProduct,
-    );
+    try {
+      await this.provider.set(
+        `product:${await this.generation()}:${id}`,
+        JSON.stringify(dto),
+        this.ttlProduct,
+      );
+    } catch (error) {
+      logger.warn('cache set product failed', { id, error: String(error) });
+    }
   }
 
   async getListing(key: string): Promise<unknown> {
-    const value = await this.provider.get(key);
-    return value ? JSON.parse(value) : null;
+    try {
+      const value = await this.provider.get(key);
+      return value ? JSON.parse(value) : null;
+    } catch (error) {
+      logger.warn('cache get listing failed', { key, error: String(error) });
+      return null;
+    }
   }
 
   async setListing(key: string, payload: unknown): Promise<void> {
-    await this.provider.set(key, JSON.stringify(payload), this.ttlListing);
+    try {
+      await this.provider.set(key, JSON.stringify(payload), this.ttlListing);
+    } catch (error) {
+      logger.warn('cache set listing failed', { key, error: String(error) });
+    }
   }
 
   async listingKey(
@@ -47,11 +74,16 @@ export class CacheService {
     page: number,
     limit: number,
   ): Promise<string> {
-    return `products:${await this.generation()}:${category ?? '*'}::${sort}:${page}:${limit}`;
+    const scope = category === undefined ? 'all' : `cat:${category}`;
+    return `products:${await this.generation()}:${scope}::${sort}:${page}:${limit}`;
   }
 
   async quit(): Promise<void> {
-    await this.provider.quit();
+    try {
+      await this.provider.quit();
+    } catch (error) {
+      logger.warn('cache quit failed', { error: String(error) });
+    }
   }
 }
 

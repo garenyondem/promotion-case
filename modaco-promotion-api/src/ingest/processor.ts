@@ -22,11 +22,11 @@ export function parseRow(raw: string[]): IngestRow | null {
     return null;
   }
   const [sku, name, category, basePriceRaw, stockRaw] = raw.map((v) => (v ?? '').trim());
-  const basePrice = Number(basePriceRaw);
-  const stockQuantity = Number(stockRaw);
-  if (!sku || !name || !category) {
+  if (!sku || !name || !category || basePriceRaw === '' || stockRaw === '') {
     return null;
   }
+  const basePrice = Number(basePriceRaw);
+  const stockQuantity = Number(stockRaw);
   if (!Number.isFinite(basePrice) || basePrice < 0) {
     return null;
   }

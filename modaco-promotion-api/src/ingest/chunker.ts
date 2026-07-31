@@ -1,6 +1,8 @@
 import { parse } from 'csv-parse';
 import type { Readable } from 'node:stream';
 
+export const CSV_HEADER = ['sku', 'name', 'category', 'basePrice', 'stockQuantity'];
+
 export async function* chunkCsvRows(
   stream: Readable,
   chunkSize: number,
@@ -11,7 +13,11 @@ export async function* chunkCsvRows(
   for await (const record of parser) {
     if (first) {
       first = false;
-      continue;
+      const values = (record as string[]).map((v) => (v ?? '').trim());
+      const isHeader = CSV_HEADER.every((name, i) => values[i] === name);
+      if (isHeader) {
+        continue;
+      }
     }
     buffer.push(record as string[]);
     if (buffer.length >= chunkSize) {

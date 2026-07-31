@@ -1,5 +1,6 @@
-import { errors } from '../../shared/errors';
 import type { CacheService } from '../../cache';
+import { errors } from '../../shared/errors';
+import { logger } from '../../shared/logger';
 import type { DiscountType, PromotionScope } from '../../shared/pricing/types';
 import { recomputeCategory, recomputeProduct } from '../../services/recompute.service';
 import { toPromotionDto, type PromotionDto } from './promotion.dto';
@@ -74,12 +75,30 @@ export class PromotionService {
       }
     }
     const promotion = await this.promotions.create(input);
-    if (input.scope === 'PRODUCT') {
-      await recomputeProduct(input.productId as string);
-    } else {
-      await recomputeCategory(input.category as string);
-    }
     await this.cache.bumpGeneration();
+    try {
+      if (input.scope === 'PRODUCT') {
+        await recomputeProduct(input.productId as string);
+      } else {
+        await recomputeCategory(input.category as string);
+      }
+      await this.cache.bumpGeneration();
+    } catch (error) {
+      try {
+        await this.promotions.delete(promotion.id);
+        if (input.scope === 'PRODUCT') {
+          await recomputeProduct(input.productId as string);
+        } else {
+          await recomputeCategory(input.category as string);
+        }
+      } catch (cleanupError) {
+        logger.error('promotion create rollback failed', {
+          promotionId: promotion.id,
+          error: String(cleanupError),
+        });
+      }
+      throw error;
+    }
     return toPromotionDto(promotion);
   }
 
@@ -91,13 +110,27 @@ export class PromotionService {
     if (promotion.status === 'CANCELLED') {
       return toPromotionDto(promotion);
     }
+    const previousStatus = promotion.status;
     const updated = await this.promotions.update(id, { status: 'CANCELLED' });
-    if (promotion.scope === 'PRODUCT' && promotion.productId) {
-      await recomputeProduct(promotion.productId);
-    } else if (promotion.scope === 'CATEGORY' && promotion.category) {
-      await recomputeCategory(promotion.category);
-    }
     await this.cache.bumpGeneration();
+    try {
+      if (promotion.scope === 'PRODUCT' && promotion.productId) {
+        await recomputeProduct(promotion.productId);
+      } else if (promotion.scope === 'CATEGORY' && promotion.category) {
+        await recomputeCategory(promotion.category);
+      }
+      await this.cache.bumpGeneration();
+    } catch (error) {
+      try {
+        await this.promotions.update(id, { status: previousStatus });
+      } catch (cleanupError) {
+        logger.error('promotion cancel rollback failed', {
+          promotionId: id,
+          error: String(cleanupError),
+        });
+      }
+      throw error;
+    }
     return toPromotionDto(updated);
   }
 
@@ -105,6 +138,9 @@ export class PromotionService {
     const promotion = await this.promotions.findById(id);
     if (!promotion) {
       throw errors.notFound('Promotion not found');
+    }
+    if (promotion.status === 'CANCELLED') {
+      throw errors.badRequest('Cannot assign a cancelled promotion');
     }
     const scope = input.scope ?? promotion.scope;
     const productId = scope === 'PRODUCT' ? (input.productId ?? promotion.productId) : null;
@@ -141,18 +177,41 @@ export class PromotionService {
         throw errors.conflict('The category already has an active promotion in that period');
       }
     }
+    const previous = {
+      scope: promotion.scope,
+      productId: promotion.productId,
+      category: promotion.category,
+    };
     const updated = await this.promotions.update(id, { scope, productId, category });
-    if (promotion.scope === 'PRODUCT' && promotion.productId) {
-      await recomputeProduct(promotion.productId);
-    } else if (promotion.scope === 'CATEGORY' && promotion.category) {
-      await recomputeCategory(promotion.category);
-    }
-    if (scope === 'PRODUCT') {
-      await recomputeProduct(productId as string);
-    } else {
-      await recomputeCategory(category as string);
-    }
     await this.cache.bumpGeneration();
+    try {
+      if (promotion.scope === 'PRODUCT' && promotion.productId) {
+        await recomputeProduct(promotion.productId);
+      } else if (promotion.scope === 'CATEGORY' && promotion.category) {
+        await recomputeCategory(promotion.category);
+      }
+      if (scope === 'PRODUCT') {
+        await recomputeProduct(productId as string);
+      } else {
+        await recomputeCategory(category as string);
+      }
+      await this.cache.bumpGeneration();
+    } catch (error) {
+      try {
+        await this.promotions.update(id, previous);
+        if (previous.scope === 'PRODUCT' && previous.productId) {
+          await recomputeProduct(previous.productId);
+        } else if (previous.scope === 'CATEGORY' && previous.category) {
+          await recomputeCategory(previous.category);
+        }
+      } catch (cleanupError) {
+        logger.error('promotion assign rollback failed', {
+          promotionId: id,
+          error: String(cleanupError),
+        });
+      }
+      throw error;
+    }
     return toPromotionDto(updated);
   }
 

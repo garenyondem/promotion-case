@@ -9,12 +9,15 @@ const listQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
 });
 
+const MAX_MONEY = 9999999999.99;
+const MAX_STOCK = 2147483647;
+
 const createProductSchema = z.object({
   sku: z.string().min(1).max(64),
   name: z.string().min(1).max(200),
   category: z.string().min(1).max(100),
-  basePrice: z.number().min(0),
-  stockQuantity: z.number().int().min(0).default(0),
+  basePrice: z.number().min(0).max(MAX_MONEY),
+  stockQuantity: z.number().int().min(0).max(MAX_STOCK).default(0),
 });
 
 const updateProductSchema = z
@@ -22,8 +25,8 @@ const updateProductSchema = z
     sku: z.string().min(1).max(64).optional(),
     name: z.string().min(1).max(200).optional(),
     category: z.string().min(1).max(100).optional(),
-    basePrice: z.number().min(0).optional(),
-    stockQuantity: z.number().int().min(0).optional(),
+    basePrice: z.number().min(0).max(MAX_MONEY).optional(),
+    stockQuantity: z.number().int().min(0).max(MAX_STOCK).optional(),
   })
   .refine((data) => Object.keys(data).length > 0, { message: 'At least one field is required' });
 

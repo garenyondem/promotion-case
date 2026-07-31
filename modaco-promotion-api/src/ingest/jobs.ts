@@ -25,7 +25,7 @@ export async function maybeComplete(jobId: string): Promise<void> {
   if (!job || job.status !== 'PROCESSING') {
     return;
   }
-  if (job.totalRecords === 0 || job.processedRecords >= job.totalRecords) {
+  if (job.totalRecords === 0 || job.processedRecords + job.skippedRecords >= job.totalRecords) {
     await prisma.ingestionJob.update({ where: { id: jobId }, data: { status: 'COMPLETED' } });
   }
 }

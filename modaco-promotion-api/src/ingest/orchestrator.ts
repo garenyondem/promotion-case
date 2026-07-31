@@ -40,13 +40,22 @@ export async function runLocalPipeline(
   storage: Storage,
 ): Promise<void> {
   const queue = new LocalQueue(join(env.QUEUE_DIR, jobId));
-  const totalRows = await orchestrate(jobId, storage, filePath, queue, chunkSize);
-  await setTotalRecords(jobId, totalRows);
-  await maybeComplete(jobId);
-  if (totalRows === 0) {
-    return;
+  try {
+    const totalRows = await orchestrate(jobId, storage, filePath, queue, chunkSize);
+    await setTotalRecords(jobId, totalRows);
+    await maybeComplete(jobId);
+    if (totalRows === 0) {
+      return;
+    }
+    await drainLocal(queue, concurrency, jobId);
+  } catch (error) {
+    try {
+      await failJob(jobId, error);
+    } catch (failError) {
+      logger.error('failed to mark job failed', { jobId, error: String(failError) });
+    }
+    throw error;
   }
-  await drainLocal(queue, concurrency, jobId);
 }
 
 async function drainLocal(queue: MessageQueue, concurrency: number, jobId: string): Promise<void> {

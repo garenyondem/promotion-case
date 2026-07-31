@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { computeEffectivePrice } from '../../shared/pricing/pricing-engine';
 import { errors } from '../../shared/errors';
 import type { CacheService } from '../../cache';
@@ -89,9 +90,19 @@ export class ProductService {
         category: p.category,
       })),
     );
-    const product = await this.products.create({ ...input, effectivePrice: result.effectivePrice });
-    await this.cache.bumpGeneration();
-    return toProductDto(product);
+    try {
+      const product = await this.products.create({
+        ...input,
+        effectivePrice: result.effectivePrice,
+      });
+      await this.cache.bumpGeneration();
+      return toProductDto(product);
+    } catch (error) {
+      if (this.isDuplicateSku(error)) {
+        throw errors.conflict(`Product with sku ${input.sku} already exists`);
+      }
+      throw error;
+    }
   }
 
   async update(id: string, input: UpdateProductInput): Promise<ProductDto> {
@@ -119,12 +130,23 @@ export class ProductService {
         category: p.category,
       })),
     );
-    const updated = await this.products.update(id, {
-      ...input,
-      effectivePrice: result.effectivePrice,
-    });
-    await this.cache.bumpGeneration();
-    return toProductDto(updated);
+    try {
+      const updated = await this.products.update(id, {
+        ...input,
+        effectivePrice: result.effectivePrice,
+      });
+      await this.cache.bumpGeneration();
+      return toProductDto(updated);
+    } catch (error) {
+      if (this.isDuplicateSku(error)) {
+        throw errors.conflict(`Product with sku ${input.sku} already exists`);
+      }
+      throw error;
+    }
+  }
+
+  private isDuplicateSku(error: unknown): boolean {
+    return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
   }
 }
 

@@ -9,12 +9,14 @@ import { createJob, getJob } from './jobs';
 import { runLocalPipeline } from './orchestrator';
 import type { Storage } from './storage';
 
+const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
+
 function saveUpload(
   req: Request,
   storage: Storage,
 ): Promise<{ filename: string; path: string; size: number }> {
   return new Promise((resolve, reject) => {
-    const bb = busboy({ headers: req.headers });
+    const bb = busboy({ headers: req.headers, limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 } });
     let result: { filename: string; path: string; size: number } | undefined;
     const writes: Promise<void>[] = [];
     bb.on('file', (_name, file: Readable, info) => {
@@ -23,6 +25,9 @@ function saveUpload(
           result = { filename: info.filename, ...saved };
         }),
       );
+    });
+    bb.on('limit', () => {
+      reject(new AppError(413, 'PAYLOAD_TOO_LARGE', 'File exceeds the upload size limit'));
     });
     bb.on('close', () => {
       Promise.all(writes)
@@ -53,9 +58,18 @@ export function ingestRoutes(ctx: AppContext): Router {
         env.INGEST_CHUNK_SIZE,
         env.INGEST_MAX_CONCURRENCY,
         ctx.storage,
-      ).catch((error) => {
-        logger.error('ingestion pipeline failed', { jobId, error: String(error) });
-      });
+      )
+        .catch((error) => {
+          logger.error('ingestion pipeline failed', { jobId, error: String(error) });
+        })
+        .finally(() => {
+          ctx.storage.deleteFile(saved.path).catch((error) => {
+            logger.warn('failed to delete uploaded file', {
+              path: saved.path,
+              error: String(error),
+            });
+          });
+        });
       res.status(202).json({ jobId, status: 'PROCESSING' });
     } catch (error) {
       next(error);
