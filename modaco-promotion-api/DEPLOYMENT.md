@@ -61,7 +61,7 @@ npm run dev                   # tsx watch, http://localhost:3000
 
 ```bash
 curl http://localhost:3000/health
-npm test                      # 26 tests, needs Docker Postgres + generated client
+npm test                      # 48 tests, needs Docker Postgres + generated client
 npm run lint
 npm run format
 npm run build                 # tsc typecheck, emits dist/src

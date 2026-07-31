@@ -199,11 +199,18 @@ Use Redis cache-aside. The `CacheService` in `src/cache/index.ts` implements it.
 - The service keeps a global `cache:generation` counter.
 - A read sets its cache key with the current generation.
 - A write (promotion create, cancel, or assign) does three things:
-  1. It bumps the generation counter.
+  1. It bumps the generation counter (before and after the recompute).
   2. It recomputes the affected products.
-  3. It deletes the affected product keys.
+  3. Old cache entries are never deleted; they expire by TTL and are simply
+     unreachable because their generation is in the key.
 - A read checks the generation before it uses a cached value. If the generation
   changed, the read treats the value as stale and reloads it.
+
+The generation is bumped twice around the recompute. The first bump makes the
+cache stop serving pre-sale entries immediately. The second bump invalidates any
+entry a reader populated from the database while the bulk recompute was still
+running. The cache degrades to a cache miss if the Redis provider throws at
+runtime, so a Redis outage slows reads but does not break them.
 
 **Reasons**
 
@@ -317,8 +324,9 @@ same time. The engine applies the product promotion only.
 **Constraint: ingest about 500,000 rows without loss.**
 
 The orchestrator streams the CSV and counts every row. The workers upsert every row.
-The job table records `totalRecords` and `processedRecords`. The job status is
-`COMPLETED` only when the processed count equals the total count.
+The job table records `totalRecords`, `processedRecords`, and `skippedRecords`. The
+job status is `COMPLETED` only when the processed count plus the skipped count equals
+the total count. A malformed row does not block the job.
 
 **Constraint: apply promotions to new products.**
 
@@ -402,6 +410,21 @@ time is about 2.5 milliseconds on a cache hit.
 - The cache is a single Redis instance. It can be a cluster in production.
 - The recompute runs in the API process. It can move to a background worker for
   very large categories.
+- Promotions are applied and reverted only at write time. There is no scheduler,
+  so a promotion with a `startAt` in the future does not auto-apply at that time,
+  and a promotion whose `endAt` passes does not auto-expire. Operators must
+  cancel a promotion to end it. This is a deliberate simplification.
+- The bulk recompute runs in autocommit batches of 2,000 rows. During the
+  recompute a reader can see a mix of new and old effective prices. The cache
+  keeps serving consistent pre-sale values for the duration. Making the recompute
+  atomic would fix the mixed window but would hold a write lock on a large
+  category for the whole update.
+- The local file queue is at-most-once. A crash between claim and delete can lose
+  a chunk. The production S3 + SQS path is at-least-once and idempotent; this is
+  the path used at scale.
+- Uploaded files are deleted from storage after the local pipeline finishes, and
+  multipart uploads are capped at 50 MB. The S3 variant should apply a lifecycle
+  rule to the ingest bucket as a safety net.
 
 ## 8. Related documents
 

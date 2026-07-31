@@ -7,8 +7,8 @@ Built with Node.js 24, TypeScript, Express 4, Prisma 6, PostgreSQL 16, Redis 7.
 ## Features
 
 - Product CRUD with category filter, price sort, and pagination.
-- Promotion CRUD with product or category scope, overlap conflict detection,
-  and cancel/restore.
+- Promotion create, list, cancel, and assign with product or category scope,
+  overlap conflict detection, and product-over-category precedence.
 - Serverless-style ingestion pipeline (S3 + SQS + Lambda) for vendor CSV files
   of about 500,000 rows.
 - Flash-sale recompute over large categories without blocking reads.
@@ -79,7 +79,7 @@ Measured on a Windows 11 laptop:
 
 | Method | Path | Description |
 | --- | --- | --- |
-| GET | `/products` | List products. Query: `category`, `sort` (`price_asc`, `price_desc`), `page`, `limit` |
+| GET | `/products` | List products. Query: `category`, `sort` (`price_asc`, `price_desc`, `created_at`), `page`, `limit` |
 | GET | `/products/:id` | Get one product |
 | POST | `/products` | Create a product. Applies active promotions |
 | PATCH | `/products/:id` | Update a product |
@@ -117,12 +117,18 @@ Both can exist at the same time.
 | POST | `/ingest` | Upload a CSV file (multipart). Returns a job ID |
 | GET | `/ingest/:id` | Get the job status and counts |
 
-CSV format (header required):
+CSV format (header required; a headerless file is treated as data, so the
+first row is never silently dropped):
 
 ```csv
 sku,name,category,basePrice,stockQuantity
 SKU-00000001,T-Shirt Basic,Apparel,12.99,150
 ```
+
+Uploads are capped at 50 MB and deleted from storage after the pipeline
+finishes. Rows with missing or invalid fields are skipped and counted in
+`skippedRecords`; the job still completes once `processedRecords +
+skippedRecords` reaches `totalRecords`.
 
 ## Tests
 
@@ -130,17 +136,19 @@ SKU-00000001,T-Shirt Basic,Apparel,12.99,150
 npm test
 ```
 
-The suite has 26 tests:
+The suite has 48 tests:
 
 - 10 unit tests for the pricing engine (`tests/unit/pricing-engine.test.ts`).
-- 16 integration tests for the API (`tests/integration/api.test.ts`).
+- 12 unit tests for the ingest chunker, row parser, and Lambda batch handler
+  (`tests/unit/ingest.test.ts`).
+- 26 integration tests for the API (`tests/integration/api.test.ts`).
 
 The integration tests use a separate database (`modaco_test`). They push the
 schema and reset it before each run. They use an in-memory cache.
 
 ## Scenario A: 500K-row ingestion
 
-1. Generate the fixture (500,000 rows, ~15 MB):
+1. Generate the fixture (500,000 rows, ~24 MB):
 
    ```bash
    npm run fixture
