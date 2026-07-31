@@ -1,0 +1,85 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Product {
+  id             String   @id @default(uuid()) @db.Uuid
+  sku            String   @unique
+  name           String
+  category       String
+  basePrice      Decimal  @db.Decimal(12, 2)
+  effectivePrice Decimal  @db.Decimal(12, 2)
+  stockQuantity  Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  promotions Promotion[]
+
+  @@index([category])
+  @@index([category, effectivePrice])
+  @@index([effectivePrice])
+  @@map("products")
+}
+
+model Promotion {
+  id           String          @id @default(uuid()) @db.Uuid
+  name         String
+  discountType DiscountType
+  value        Decimal         @db.Decimal(12, 2)
+  startAt      DateTime
+  endAt        DateTime
+  status       PromotionStatus @default(ACTIVE)
+  scope        PromotionScope
+  productId    String?         @db.Uuid
+  category     String?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  product Product? @relation(fields: [productId], references: [id])
+
+  @@index([status])
+  @@index([scope])
+  @@index([category])
+  @@index([productId])
+  @@map("promotions")
+}
+
+model IngestionJob {
+  id               String    @id @default(uuid()) @db.Uuid
+  fileName         String
+  totalRecords     Int       @default(0)
+  processedRecords Int       @default(0)
+  skippedRecords   Int       @default(0)
+  status           JobStatus @default(PROCESSING)
+  error            String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@map("ingestion_jobs")
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED_AMOUNT
+}
+
+enum PromotionStatus {
+  ACTIVE
+  CANCELLED
+}
+
+enum PromotionScope {
+  PRODUCT
+  CATEGORY
+}
+
+enum JobStatus {
+  PROCESSING
+  COMPLETED
+  FAILED
+}

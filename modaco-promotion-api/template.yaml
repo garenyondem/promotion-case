@@ -1,0 +1,94 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: ModaCo Promotion Management API - serverless ingestion path (S3 + SQS + Lambda).
+
+Parameters:
+  IngestionBucketName:
+    Type: String
+    Default: modaco-vendor-files
+  IngestChunkSize:
+    Type: Number
+    Default: 1000
+  DatabaseUrl:
+    Type: String
+    Description: PostgreSQL connection string for the worker Lambda.
+    NoEcho: true
+
+Resources:
+  IngestionBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref IngestionBucketName
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: s3:ObjectCreated:*
+            Function: !GetAtt OrchestratorLambda.Arn
+
+  IngestionQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: modaco-ingestion-chunks
+      VisibilityTimeout: 300
+      MessageRetentionPeriod: 1209600
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt IngestionDLQ.Arn
+        maxReceiveCount: 3
+
+  IngestionDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: modaco-ingestion-chunks-dlq
+
+  OrchestratorLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: dist-lambda/
+      Handler: orchestrator.handler
+      Runtime: nodejs20.x
+      Timeout: 300
+      MemorySize: 512
+      Environment:
+        Variables:
+          INGEST_BUCKET: !Ref IngestionBucket
+          INGEST_QUEUE_URL: !Ref IngestionQueue
+          INGEST_CHUNK_SIZE: !Ref IngestChunkSize
+          DATABASE_URL: !Ref DatabaseUrl
+          CACHE_DRIVER: memory
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref IngestionBucketName
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt IngestionQueue.QueueName
+
+  WorkerLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: dist-lambda/
+      Handler: pricing-worker.handler
+      Runtime: nodejs20.x
+      Timeout: 120
+      MemorySize: 1024
+      Environment:
+        Variables:
+          DATABASE_URL: !Ref DatabaseUrl
+          CACHE_DRIVER: memory
+      Events:
+        QueueEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt IngestionQueue.Arn
+            BatchSize: 10
+            FunctionResponseTypes:
+              - ReportBatchItemFailures
+      Policies:
+        - SQSPollerPolicy:
+            QueueName: !GetAtt IngestionQueue.QueueName
+      VpcConfig:
+        SecurityGroupIds: []
+        SubnetIds: []
+
+Outputs:
+  IngestionBucket:
+    Value: !Ref IngestionBucket
+  IngestionQueueUrl:
+    Value: !Ref IngestionQueue

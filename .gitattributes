@@ -1,0 +1,21 @@
+# Normalize line endings for the Node/TypeScript project.
+# Keeps files as LF in the repository on all platforms.
+
+* text=auto
+
+*.ts text eol=lf
+*.js text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.prisma text eol=lf
+*.env.example text eol=lf
+
+# Binaries and images are kept as-is.
+*.pdf binary
+*.docx binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary

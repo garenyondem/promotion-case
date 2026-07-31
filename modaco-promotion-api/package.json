@@ -1,0 +1,25 @@
+{
+  "name": "modaco-promotion-api",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ModaCo Promotion Management API - internal product catalog and promotions API",
+  "main": "dist/src/server.js",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/src/server.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:deploy": "prisma migrate deploy",
+    "db:push": "prisma db push",
+    "db:seed": "tsx prisma/seed.ts",
+    "fixture": "tsx scripts/generate-fixture.ts",
+    "ingest": "tsx scripts/local-ingest.ts",
+    "lambda:build": "esbuild lambdas/orchestrator.ts lambdas/pricing-worker.ts --bundle --platform=node --target=node20 --outdir=dist-lambda --external:@prisma/client --external:@aws-sdk/client-s3 --external:@aws-sdk/client-sqs"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  }
+}
