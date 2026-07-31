@@ -1,7 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { promises as fsp } from 'node:fs';
 import { join } from 'node:path';
-import { SQSClient, SendMessageBatchCommand, ReceiveMessageCommand, DeleteMessageCommand } from '@aws-sdk/client-sqs';
+import {
+  SQSClient,
+  SendMessageBatchCommand,
+  ReceiveMessageCommand,
+  DeleteMessageCommand,
+} from '@aws-sdk/client-sqs';
 
 export interface QueueMessage {
   body: string;
@@ -37,16 +42,15 @@ export class LocalQueue implements MessageQueue {
         break;
       }
       const lock = `${file}.lock`;
-      let handle: Awaited<ReturnType<typeof fsp.open>> | null = null;
       try {
-        handle = await fsp.open(join(this.dir, lock), 'wx');
+        const handle = await fsp.open(join(this.dir, lock), 'wx');
+        await handle.close();
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
           continue;
         }
         throw error;
       }
-      await handle.close();
       const body = await fsp.readFile(join(this.dir, file), 'utf8');
       await fsp.rm(join(this.dir, file), { force: true });
       result.push({ body, receiptId: lock });
@@ -67,19 +71,30 @@ export class SQSQueue implements MessageQueue {
 
   async sendMessages(messages: string[]): Promise<void> {
     for (let i = 0; i < messages.length; i += 10) {
-      const batch = messages.slice(i, i + 10).map((body, index) => ({ Id: `${i}-${index}`, MessageBody: body }));
+      const batch = messages
+        .slice(i, i + 10)
+        .map((body, index) => ({ Id: `${i}-${index}`, MessageBody: body }));
       await this.client.send(new SendMessageBatchCommand({ QueueUrl: this.url, Entries: batch }));
     }
   }
 
   async receiveMessages(max: number): Promise<QueueMessage[]> {
     const response = await this.client.send(
-      new ReceiveMessageCommand({ QueueUrl: this.url, MaxNumberOfMessages: max, WaitTimeSeconds: 1 }),
+      new ReceiveMessageCommand({
+        QueueUrl: this.url,
+        MaxNumberOfMessages: max,
+        WaitTimeSeconds: 1,
+      }),
     );
-    return (response.Messages ?? []).map((m) => ({ body: m.Body ?? '', receiptId: m.ReceiptHandle ?? '' }));
+    return (response.Messages ?? []).map((m) => ({
+      body: m.Body ?? '',
+      receiptId: m.ReceiptHandle ?? '',
+    }));
   }
 
   async deleteMessage(receiptId: string): Promise<void> {
-    await this.client.send(new DeleteMessageCommand({ QueueUrl: this.url, ReceiptHandle: receiptId }));
+    await this.client.send(
+      new DeleteMessageCommand({ QueueUrl: this.url, ReceiptHandle: receiptId }),
+    );
   }
 }

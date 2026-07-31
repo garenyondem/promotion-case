@@ -1,0 +1,8 @@
+dist
+dist-lambda
+node_modules
+data
+package-lock.json
+*.md
+*.yml
+opencode.json

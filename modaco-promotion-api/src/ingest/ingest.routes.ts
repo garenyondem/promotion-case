@@ -9,7 +9,10 @@ import { createJob, getJob } from './jobs';
 import { runLocalPipeline } from './orchestrator';
 import type { Storage } from './storage';
 
-function saveUpload(req: Request, storage: Storage): Promise<{ filename: string; path: string; size: number }> {
+function saveUpload(
+  req: Request,
+  storage: Storage,
+): Promise<{ filename: string; path: string; size: number }> {
   return new Promise((resolve, reject) => {
     const bb = busboy({ headers: req.headers });
     let result: { filename: string; path: string; size: number } | undefined;
@@ -44,11 +47,15 @@ export function ingestRoutes(ctx: AppContext): Router {
     try {
       const saved = await saveUpload(req, ctx.storage);
       const jobId = await createJob(saved.filename);
-      void runLocalPipeline(jobId, saved.path, env.INGEST_CHUNK_SIZE, env.INGEST_MAX_CONCURRENCY, ctx.storage).catch(
-        (error) => {
-          logger.error('ingestion pipeline failed', { jobId, error: String(error) });
-        },
-      );
+      void runLocalPipeline(
+        jobId,
+        saved.path,
+        env.INGEST_CHUNK_SIZE,
+        env.INGEST_MAX_CONCURRENCY,
+        ctx.storage,
+      ).catch((error) => {
+        logger.error('ingestion pipeline failed', { jobId, error: String(error) });
+      });
       res.status(202).json({ jobId, status: 'PROCESSING' });
     } catch (error) {
       next(error);

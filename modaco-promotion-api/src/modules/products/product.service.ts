@@ -34,7 +34,12 @@ export class ProductService {
   ) {}
 
   async list(params: ListProductsParams): Promise<ProductListPayload> {
-    const key = await this.cache.listingKey(params.category, params.sort, params.page, params.limit);
+    const key = await this.cache.listingKey(
+      params.category,
+      params.sort,
+      params.page,
+      params.limit,
+    );
     const cached = await this.cache.getListing(key);
     if (cached) {
       return cached as unknown as ProductListPayload;
@@ -42,7 +47,12 @@ export class ProductService {
     const { total, items } = await this.products.list(params);
     const payload: ProductListPayload = {
       data: items.map(toProductDto),
-      pagination: { page: params.page, limit: params.limit, total, totalPages: Math.ceil(total / params.limit) },
+      pagination: {
+        page: params.page,
+        limit: params.limit,
+        total,
+        totalPages: Math.ceil(total / params.limit),
+      },
     };
     await this.cache.setListing(key, payload);
     return payload;
@@ -109,7 +119,10 @@ export class ProductService {
         category: p.category,
       })),
     );
-    const updated = await this.products.update(id, { ...input, effectivePrice: result.effectivePrice });
+    const updated = await this.products.update(id, {
+      ...input,
+      effectivePrice: result.effectivePrice,
+    });
     await this.cache.bumpGeneration();
     return toProductDto(updated);
   }

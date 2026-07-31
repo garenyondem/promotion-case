@@ -2,7 +2,12 @@ import { createReadStream, createWriteStream, promises as fsp } from 'node:fs';
 import { basename, join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import type { Readable } from 'node:stream';
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+  DeleteObjectCommand,
+} from '@aws-sdk/client-s3';
 import { env } from '../config/env';
 
 export interface StoredFile {
@@ -49,7 +54,9 @@ export class S3Storage implements Storage {
   }
 
   async openReadStream(key: string): Promise<Readable> {
-    const response = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: key }));
+    const response = await this.client.send(
+      new GetObjectCommand({ Bucket: this.bucket, Key: key }),
+    );
     return response.Body as unknown as Readable;
   }
 

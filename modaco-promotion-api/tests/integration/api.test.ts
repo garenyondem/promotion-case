@@ -32,7 +32,9 @@ async function resetDb(): Promise<void> {
   await app.cache.bumpGeneration();
 }
 
-async function createProduct(overrides: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
+async function createProduct(
+  overrides: Record<string, unknown> = {},
+): Promise<Record<string, unknown>> {
   const res = await request(server)
     .post('/products')
     .send({
@@ -48,7 +50,9 @@ async function createProduct(overrides: Record<string, unknown> = {}): Promise<R
 }
 
 async function createPromotion(body: Record<string, unknown>): Promise<Record<string, unknown>> {
-  const res = await request(server).post('/promotions').send({ ...activeWindow, ...body });
+  const res = await request(server)
+    .post('/promotions')
+    .send({ ...activeWindow, ...body });
   expect(res.status).toBe(201);
   return res.body;
 }
@@ -77,7 +81,9 @@ describe('products API', () => {
   });
 
   it('rejects a duplicate sku', async () => {
-    await request(server).post('/products').send({ sku: 'A-1', name: 'Shoe', category: 'Footwear', basePrice: 100 });
+    await request(server)
+      .post('/products')
+      .send({ sku: 'A-1', name: 'Shoe', category: 'Footwear', basePrice: 100 });
     const res = await request(server)
       .post('/products')
       .send({ sku: 'A-1', name: 'Shoe 2', category: 'Footwear', basePrice: 90 });
@@ -90,7 +96,9 @@ describe('products API', () => {
     await createProduct({ sku: 'B-3', category: 'Accessories', basePrice: 100 });
     await createProduct({ sku: 'B-4', category: 'Footwear', basePrice: 999 });
 
-    const res = await request(server).get('/products?category=Accessories&sort=price_desc&page=1&limit=2');
+    const res = await request(server).get(
+      '/products?category=Accessories&sort=price_desc&page=1&limit=2',
+    );
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveLength(2);
     expect(res.body.pagination.total).toBe(3);
@@ -145,14 +153,16 @@ describe('promotions API', () => {
       scope: 'PRODUCT',
       productId: product.id,
     });
-    const res = await request(server).post('/promotions').send({
-      ...activeWindow,
-      name: 'Promo 2',
-      discountType: 'PERCENTAGE',
-      value: 20,
-      scope: 'PRODUCT',
-      productId: product.id,
-    });
+    const res = await request(server)
+      .post('/promotions')
+      .send({
+        ...activeWindow,
+        name: 'Promo 2',
+        discountType: 'PERCENTAGE',
+        value: 20,
+        scope: 'PRODUCT',
+        productId: product.id,
+      });
     expect(res.status).toBe(409);
   });
 
@@ -220,14 +230,16 @@ describe('promotions API', () => {
       scope: 'CATEGORY',
       category: 'Accessories',
     });
-    const res = await request(server).post('/promotions').send({
-      ...activeWindow,
-      name: 'Flash 2',
-      discountType: 'PERCENTAGE',
-      value: 30,
-      scope: 'CATEGORY',
-      category: 'Accessories',
-    });
+    const res = await request(server)
+      .post('/promotions')
+      .send({
+        ...activeWindow,
+        name: 'Flash 2',
+        discountType: 'PERCENTAGE',
+        value: 30,
+        scope: 'CATEGORY',
+        category: 'Accessories',
+      });
     expect(res.status).toBe(409);
   });
 
@@ -267,14 +279,16 @@ describe('promotions API', () => {
 
   it('rejects an invalid percentage value', async () => {
     const product = await createProduct({ sku: 'L-1' });
-    const res = await request(server).post('/promotions').send({
-      ...activeWindow,
-      name: 'Bad',
-      discountType: 'PERCENTAGE',
-      value: 150,
-      scope: 'PRODUCT',
-      productId: product.id,
-    });
+    const res = await request(server)
+      .post('/promotions')
+      .send({
+        ...activeWindow,
+        name: 'Bad',
+        discountType: 'PERCENTAGE',
+        value: 150,
+        scope: 'PRODUCT',
+        productId: product.id,
+      });
     expect(res.status).toBe(400);
   });
 });
@@ -310,7 +324,7 @@ describe('ingestion API (Scenario A)', () => {
     for (let i = 0; i < 200; i++) {
       const res = await request(server).get(`/ingest/${jobId}`);
       job = res.body;
-      if (job.status !== 'PROCESSING') {
+      if (job?.status !== 'PROCESSING') {
         break;
       }
       await new Promise((r) => setTimeout(r, 50));
@@ -335,7 +349,7 @@ describe('ingestion API (Scenario A)', () => {
     for (let i = 0; i < 200; i++) {
       const res = await request(server).get(`/ingest/${rerun.body.jobId}`);
       rerunJob = res.body;
-      if (rerunJob.status !== 'PROCESSING') {
+      if (rerunJob?.status !== 'PROCESSING') {
         break;
       }
       await new Promise((r) => setTimeout(r, 50));

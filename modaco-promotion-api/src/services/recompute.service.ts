@@ -28,13 +28,24 @@ export async function recomputeProduct(productId: string): Promise<void> {
     return;
   }
   const promos = await activePromotions({
-    OR: [{ scope: 'PRODUCT', productId }, { scope: 'CATEGORY', category: product.category }],
+    OR: [
+      { scope: 'PRODUCT', productId },
+      { scope: 'CATEGORY', category: product.category },
+    ],
   });
   const result = computeEffectivePrice(
-    { id: product.id, sku: product.sku, category: product.category, basePrice: Number(product.basePrice) },
+    {
+      id: product.id,
+      sku: product.sku,
+      category: product.category,
+      basePrice: Number(product.basePrice),
+    },
     promos,
   );
-  await prisma.product.update({ where: { id: productId }, data: { effectivePrice: result.effectivePrice } });
+  await prisma.product.update({
+    where: { id: productId },
+    data: { effectivePrice: result.effectivePrice },
+  });
 }
 
 export async function recomputeCategory(category: string): Promise<void> {
@@ -87,7 +98,9 @@ export async function recomputeCategory(category: string): Promise<void> {
   }
 }
 
-async function bulkUpdateEffectivePrices(updates: Array<{ id: string; price: number }>): Promise<void> {
+async function bulkUpdateEffectivePrices(
+  updates: Array<{ id: string; price: number }>,
+): Promise<void> {
   if (updates.length === 0) {
     return;
   }

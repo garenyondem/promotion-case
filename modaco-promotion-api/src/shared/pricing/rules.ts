@@ -22,7 +22,7 @@ export function discountRule(ctx: PricingContext): PricingContext {
     return ctx;
   }
   const baseCents = toCents(ctx.basePrice);
-  let cents = baseCents;
+  let cents: number;
   if (ctx.discountType === 'PERCENTAGE') {
     cents = Math.round((baseCents * (100 - ctx.value)) / 100);
   } else {

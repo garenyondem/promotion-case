@@ -30,7 +30,12 @@ export class PromotionRepository {
     return prisma.promotion.update({ where: { id }, data });
   }
 
-  findOverlappingProductPromo(productId: string, startAt: Date, endAt: Date, excludeId?: string): Promise<Promotion | null> {
+  findOverlappingProductPromo(
+    productId: string,
+    startAt: Date,
+    endAt: Date,
+    excludeId?: string,
+  ): Promise<Promotion | null> {
     return prisma.promotion.findFirst({
       where: {
         status: 'ACTIVE',
@@ -43,7 +48,12 @@ export class PromotionRepository {
     });
   }
 
-  findOverlappingCategoryPromo(category: string, startAt: Date, endAt: Date, excludeId?: string): Promise<Promotion | null> {
+  findOverlappingCategoryPromo(
+    category: string,
+    startAt: Date,
+    endAt: Date,
+    excludeId?: string,
+  ): Promise<Promotion | null> {
     return prisma.promotion.findFirst({
       where: {
         status: 'ACTIVE',
@@ -59,7 +69,13 @@ export class PromotionRepository {
   findActiveCategoryPromos(category: string): Promise<Promotion[]> {
     const now = new Date();
     return prisma.promotion.findMany({
-      where: { status: 'ACTIVE', scope: 'CATEGORY', category, startAt: { lte: now }, endAt: { gte: now } },
+      where: {
+        status: 'ACTIVE',
+        scope: 'CATEGORY',
+        category,
+        startAt: { lte: now },
+        endAt: { gte: now },
+      },
     });
   }
 
@@ -70,7 +86,10 @@ export class PromotionRepository {
         status: 'ACTIVE',
         startAt: { lte: now },
         endAt: { gte: now },
-        OR: [{ scope: 'PRODUCT', productId }, { scope: 'CATEGORY', category }],
+        OR: [
+          { scope: 'PRODUCT', productId },
+          { scope: 'CATEGORY', category },
+        ],
       },
     });
   }

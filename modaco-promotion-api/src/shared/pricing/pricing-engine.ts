@@ -11,7 +11,11 @@ export function resolveEffectivePromotion(
     }
     return p.category === product.category;
   });
-  return covering.find((p) => p.scope === 'PRODUCT') ?? covering.find((p) => p.scope === 'CATEGORY') ?? null;
+  return (
+    covering.find((p) => p.scope === 'PRODUCT') ??
+    covering.find((p) => p.scope === 'CATEGORY') ??
+    null
+  );
 }
 
 export function computeEffectivePrice(

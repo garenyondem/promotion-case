@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { computeEffectivePrice, resolveEffectivePromotion } from '../../src/shared/pricing/pricing-engine';
+import {
+  computeEffectivePrice,
+  resolveEffectivePromotion,
+} from '../../src/shared/pricing/pricing-engine';
 import type { PriceProduct, PricePromotion } from '../../src/shared/pricing/types';
 
 const product: PriceProduct = { id: 'p1', sku: 'SKU-1', category: 'Accessories', basePrice: 100 };

@@ -54,13 +54,21 @@ export class PromotionService {
       if (!(await this.productExists(productId))) {
         throw errors.notFound('Product not found');
       }
-      const overlapping = await this.promotions.findOverlappingProductPromo(productId, input.startAt, input.endAt);
+      const overlapping = await this.promotions.findOverlappingProductPromo(
+        productId,
+        input.startAt,
+        input.endAt,
+      );
       if (overlapping) {
         throw errors.conflict('The product already has an active promotion in that period');
       }
     } else {
       const category = input.category as string;
-      const overlapping = await this.promotions.findOverlappingCategoryPromo(category, input.startAt, input.endAt);
+      const overlapping = await this.promotions.findOverlappingCategoryPromo(
+        category,
+        input.startAt,
+        input.endAt,
+      );
       if (overlapping) {
         throw errors.conflict('The category already has an active promotion in that period');
       }

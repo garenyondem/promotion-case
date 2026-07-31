@@ -7,10 +7,8 @@ import { PromotionService } from './promotion.service';
 
 export function promotionRoutes(ctx: AppContext): Router {
   const products = new ProductRepository();
-  const service = new PromotionService(
-    new PromotionRepository(),
-    ctx.cache,
-    (id) => products.findById(id).then((p) => p !== null),
+  const service = new PromotionService(new PromotionRepository(), ctx.cache, (id) =>
+    products.findById(id).then((p) => p !== null),
   );
   const controller = new PromotionController(service);
   const router = Router();

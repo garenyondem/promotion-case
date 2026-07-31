@@ -9,7 +9,8 @@ function parseArgs(): { rows: number; out: string } {
   const rowsIndex = argv.indexOf('--rows');
   const outIndex = argv.indexOf('--out');
   const rows = rowsIndex >= 0 ? Number(argv[rowsIndex + 1]) : 500000;
-  const out = outIndex >= 0 ? argv[outIndex + 1] : join(process.cwd(), 'data', 'fixtures', 'products.csv');
+  const out =
+    outIndex >= 0 ? argv[outIndex + 1] : join(process.cwd(), 'data', 'fixtures', 'products.csv');
   return { rows, out };
 }
 

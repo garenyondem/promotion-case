@@ -1,4 +1,3 @@
-import { createClient } from 'redis';
 import { env } from '../config/env';
 import { logger } from '../shared/logger';
 import { MemoryCache } from './memory-cache';
@@ -26,7 +25,11 @@ export class CacheService {
   }
 
   async setProduct(id: string, dto: unknown): Promise<void> {
-    await this.provider.set(`product:${await this.generation()}:${id}`, JSON.stringify(dto), this.ttlProduct);
+    await this.provider.set(
+      `product:${await this.generation()}:${id}`,
+      JSON.stringify(dto),
+      this.ttlProduct,
+    );
   }
 
   async getListing(key: string): Promise<unknown> {
@@ -38,7 +41,12 @@ export class CacheService {
     await this.provider.set(key, JSON.stringify(payload), this.ttlListing);
   }
 
-  async listingKey(category: string | undefined, sort: string, page: number, limit: number): Promise<string> {
+  async listingKey(
+    category: string | undefined,
+    sort: string,
+    page: number,
+    limit: number,
+  ): Promise<string> {
     return `products:${await this.generation()}:${category ?? '*'}::${sort}:${page}:${limit}`;
   }
 

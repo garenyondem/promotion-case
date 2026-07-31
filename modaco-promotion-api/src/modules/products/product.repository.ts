@@ -21,7 +21,12 @@ export class ProductRepository {
           : { createdAt: 'desc' };
     const [total, items] = await prisma.$transaction([
       prisma.product.count({ where }),
-      prisma.product.findMany({ where, orderBy, skip: (params.page - 1) * params.limit, take: params.limit }),
+      prisma.product.findMany({
+        where,
+        orderBy,
+        skip: (params.page - 1) * params.limit,
+        take: params.limit,
+      }),
     ]);
     return { total, items };
   }

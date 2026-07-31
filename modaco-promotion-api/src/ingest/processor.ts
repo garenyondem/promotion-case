@@ -36,7 +36,9 @@ export function parseRow(raw: string[]): IngestRow | null {
   return { sku, name, category, basePrice, stockQuantity };
 }
 
-export async function processChunk(message: ChunkMessage): Promise<{ upserted: number; skipped: number }> {
+export async function processChunk(
+  message: ChunkMessage,
+): Promise<{ upserted: number; skipped: number }> {
   const { jobId, rows } = message;
   const parsed = rows.map(parseRow);
   const valid = parsed.filter((r): r is IngestRow => r !== null);
@@ -63,12 +65,22 @@ export async function processChunk(message: ChunkMessage): Promise<{ upserted: n
       continue;
     }
     const list = categoryMap.get(promo.category) ?? [];
-    list.push({ id: promo.id, discountType: promo.discountType, value: Number(promo.value), scope: promo.scope, productId: promo.productId, category: promo.category });
+    list.push({
+      id: promo.id,
+      discountType: promo.discountType,
+      value: Number(promo.value),
+      scope: promo.scope,
+      productId: promo.productId,
+      category: promo.category,
+    });
     categoryMap.set(promo.category, list);
   }
 
   const skus = valid.map((r) => r.sku);
-  const existing = await prisma.product.findMany({ where: { sku: { in: skus } }, select: { id: true, sku: true } });
+  const existing = await prisma.product.findMany({
+    where: { sku: { in: skus } },
+    select: { id: true, sku: true },
+  });
   const existingIdBySku = new Map(existing.map((p) => [p.sku, p.id]));
   const existingIds = existing.map((p) => p.id);
   const productPromos =
@@ -89,7 +101,14 @@ export async function processChunk(message: ChunkMessage): Promise<{ upserted: n
       continue;
     }
     const list = productPromoMap.get(promo.productId) ?? [];
-    list.push({ id: promo.id, discountType: promo.discountType, value: Number(promo.value), scope: promo.scope, productId: promo.productId, category: promo.category });
+    list.push({
+      id: promo.id,
+      discountType: promo.discountType,
+      value: Number(promo.value),
+      scope: promo.scope,
+      productId: promo.productId,
+      category: promo.category,
+    });
     productPromoMap.set(promo.productId, list);
   }
 
@@ -97,7 +116,7 @@ export async function processChunk(message: ChunkMessage): Promise<{ upserted: n
   const prepared = valid.map((row) => {
     const productId = existingIdBySku.get(row.sku) ?? null;
     const covering: PricePromotion[] = [
-      ...(productId ? productPromoMap.get(productId) ?? [] : []),
+      ...(productId ? (productPromoMap.get(productId) ?? []) : []),
       ...(categoryMap.get(row.category) ?? []),
     ];
     const result = computeEffectivePrice(
@@ -146,7 +165,17 @@ async function bulkUpsertProducts(rows: PreparedProduct[]): Promise<void> {
     placeholders.push(
       `($${base + 1}::uuid,$${base + 2},$${base + 3},$${base + 4},$${base + 5}::numeric,$${base + 6}::numeric,$${base + 7},$${base + 8},$${base + 9})`,
     );
-    values.push(row.id, row.sku, row.name, row.category, row.basePrice, row.effectivePrice, row.stockQuantity, row.createdAt, row.updatedAt);
+    values.push(
+      row.id,
+      row.sku,
+      row.name,
+      row.category,
+      row.basePrice,
+      row.effectivePrice,
+      row.stockQuantity,
+      row.createdAt,
+      row.updatedAt,
+    );
   });
   const sql = `INSERT INTO "products" ("id","sku","name","category","basePrice","effectivePrice","stockQuantity","createdAt","updatedAt")
 VALUES ${placeholders.join(',')}
