@@ -1,0 +1,66 @@
+name: modaco-promotion-api-prod
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: modaco-prod-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-modaco}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-modaco}
+      POSTGRES_DB: ${POSTGRES_DB:-modaco}
+    volumes:
+      - prod_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-modaco}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: modaco-prod-redis
+    command: redis-server ${REDIS_ARGS:-}
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  migrate:
+    build:
+      context: .
+    container_name: modaco-prod-migrate
+    command: npx prisma migrate deploy
+    env_file: .env.prod
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: .
+    container_name: modaco-prod-api
+    env_file: .env.prod
+    environment:
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  prod_pgdata:

@@ -52,11 +52,12 @@ Measured on a Windows 11 laptop:
 
    ```bash
    npm run prisma:generate
-   npm run db:push
+   npm run prisma:migrate -- --name init
    npm run db:seed
    ```
 
-   `db:push` applies the schema in `prisma/schema.prisma`.
+   `prisma:migrate` applies the migrations in `prisma/migrations/`. See
+   `DEPLOYMENT.md` for the migration workflow and the production guides.
 
 5. Start the API:
 
@@ -263,6 +264,11 @@ npm run lambda:build
 
 Prisma on Lambda needs the query engine. Add the engine binaries to the bundle
 (or use a Prisma Lambda layer) before production deployment.
+
+## Deployment
+
+See `DEPLOYMENT.md` for the local and production deployment guides, the Prisma
+migration workflow, and the Docker and SAM deployment steps.
 
 ## Configuration
 

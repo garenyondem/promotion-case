@@ -92,3 +92,5 @@ $RECYCLE.BIN/
 *.stackdump
 *.lnk
 modaco-promotion-api/opencode.json
+opencode.json
+.playwright-mcp
